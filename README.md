@@ -1,1 +1,1 @@
-# NeRF-Drone-Mapping
+# SLAM-Person-Mapping

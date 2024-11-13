@@ -1,0 +1,11 @@
+raw_x -0.296566009521
+raw_y -0.379703521729
+conv_x 506
+conv_y 504
+orient_x 0.0
+orient_y 0.0
+orient_z 0.196609526873
+orient_w 0.980481863022
+roll 0.0
+pitch -0.0
+yaw 22.677526181

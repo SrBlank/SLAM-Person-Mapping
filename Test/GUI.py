@@ -2,14 +2,6 @@ import pygame
 import sys
 import numpy as np
 
-# Initialize pygame
-pygame.init()
-
-# Set up display
-width, height = 600, 600  # Adjust if necessary based on grid size and resolution
-window = pygame.display.set_mode((width, height))
-pygame.display.set_caption("Occupancy Grid with Drone Position")
-
 # Colors
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -18,17 +10,25 @@ GREEN = (0, 255, 0)     # Free space
 RED = (255, 0, 0)       # Obstacle
 BLUE = (0, 0, 255)      # Person
 
-# Grid settings
-grid_size = 10  # Size of each grid cell in pixels, adjust based on display
-grid_dim = 50   # This is for the 50x50 subgrid; change to 2048 if working with full grid
+# Initialize pygame
+pygame.init()
+
+# Set up display
+width, height = 600, 600  # Adjust if necessary based on grid size and resolution
+window = pygame.display.set_mode((width, height))
+pygame.display.set_caption("Occupancy Grid with Drone Position")
 
 # Load the occupancy grid from the data (example using random data here)
 # Replace this with actual loading logic for whole_grid_complete or sub_grid_1_complete
-occupancy_grid = np.random.choice([-1, 0, 100, 50], (grid_dim, grid_dim), p=[0.2, 0.6, 0.1, 0.1])
+#occupancy_grid = np.random.choice([-1, 0, 100, 50], (grid_dim, grid_dim), p=[0.2, 0.6, 0.1, 0.1])
+occupancy_grid = np.loadtxt("./Data/partial_person_mapped.txt")
 
+# Grid settings
+grid_size = 10  # Size of each grid cell in pixels, adjust based on display
+grid_dim = occupancy_grid.shape[0]   # This will work for any mxm sized grid loaded in
 
 # Drone's initial position (grid coordinates)
-drone_pos = (25, 25)  # Start at the center of the grid
+drone_pos = (74, 74)  # Start at the center of the grid
 
 # Function to draw the occupancy grid
 def draw_occupancy_grid():

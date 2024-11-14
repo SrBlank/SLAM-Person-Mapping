@@ -3,6 +3,7 @@ import sys
 import numpy as np
 import requests
 import rospy
+import math
 
 from slam_handler import Grid, PoseEstimate
 
@@ -24,11 +25,7 @@ USE_DYNAMIC_POS = False # False: uses keyboard to move drone around, True: uses 
 """
 GRID 
 """
-def get_grid_data(hector, wheresHector):
-	hector.getOccupancyGrid()
-	wheresHector.getRawPosition(hector.resolution, hector.width, hector.height)
-
-def get_api_data(api_url="http://localhost:5000/get_people"):
+def get_api_data(api_url="http://192.168.50.79:5000/get_people"):
     try:
         response = requests.get(api_url)
         if response.status_code == 200:
@@ -42,12 +39,8 @@ def get_api_data(api_url="http://localhost:5000/get_people"):
         print("Error fetching data: ",e)
         return None
 
-def plot_people_on_grid(hector, wheresHector, people):
+def plot_people_on_grid(hector, wheresHector, people, circle_radius=2):
     occupancy_grid = hector.grid.copy()
-
-    # Plot robot position at grid value 25
-    #if 0 <= robot_x < grid_width and 0 <= robot_y < grid_height:
-    #    occupancy_grid[robot_y, robot_x] = 25
 
     # Plot each detected person in the grid with value 50
     for person in people:
@@ -62,9 +55,16 @@ def plot_people_on_grid(hector, wheresHector, people):
             person_x = wheresHector.conv_x + offset_x
             person_y = wheresHector.conv_y + offset_y
 
-            # Ensure coordinates are within grid bounds
-            if 0 <= person_x < hector.width and 0 <= person_y < hector.height:
-                occupancy_grid[person_y, person_x] = 50
+            # Draw a circle of 50 around the detected person
+            for dx in range(-circle_radius, circle_radius + 1):
+                for dy in range(-circle_radius, circle_radius + 1):
+                    if dx**2 + dy**2 <= circle_radius**2:  # Check if the point is within the circle
+                        circle_x = person_x + dx
+                        circle_y = person_y + dy
+
+                        # Ensure coordinates are within grid bounds
+                        if 0 <= circle_x < hector.width and 0 <= circle_y < hector.height:
+                            occupancy_grid[circle_y, circle_x] = 50
     
     return occupancy_grid
 
@@ -79,11 +79,31 @@ def draw_occupancy_grid(occupancy_grid):
             color = GRAY if cell_value == -1 else GREEN if cell_value == 0 else RED if cell_value == 100 else BLUE
             pygame.draw.rect(window, color, (col * GRID_SIZE, row * GRID_SIZE, GRID_SIZE, GRID_SIZE))
 
-# Function to draw the drone
-def draw_drone(pos):
+# Function to draw the drone with its direction (yaw)
+def draw_drone(pos, yaw):
+    # Fixed size for the drone's circle (independent of GRID_SIZE)
+    drone_radius = 20  # Adjust size as needed
+
+    # Drone position in pixels
     x = pos[0] * GRID_SIZE + GRID_SIZE // 2
     y = pos[1] * GRID_SIZE + GRID_SIZE // 2
-    pygame.draw.circle(window, WHITE, (x, y), GRID_SIZE // 3)
+
+    # Draw the drone as a circle
+    pygame.draw.circle(window, WHITE, (x, y), drone_radius)
+
+    # Calculate the direction the drone is facing (yaw is in degrees)
+    # Convert yaw to radians
+    yaw_rad = math.radians(yaw)
+
+    # Define the length of the direction arrow
+    arrow_length = 30  # You can adjust this value based on the size of the drone
+
+    # Calculate the arrow endpoint (direction the drone is facing)
+    end_x = x + int(arrow_length * math.cos(yaw_rad))
+    end_y = y + int(arrow_length * math.sin(yaw_rad))
+
+    # Draw the direction arrow
+    pygame.draw.line(window, BLUE, (x, y), (end_x, end_y), 3)
 
 """
 DRIVER
@@ -95,6 +115,7 @@ def main():
     # intial gather data (blocking function) to know we are ready
     hector.getOccupancyGrid()  
     wheresHector.getRawPosition(hector.resolution, hector.width, hector.height)
+    original_pos = (wheresHector.conv_x, wheresHector.conv_y)
 
     is_drone_pos_init = False # switch because i cant code 
 
@@ -112,17 +133,21 @@ def main():
 
         # Data gathering and processing
         hector.getOccupancyGrid()
-        #person_data = get_api_data() # gather newest person detection
+        wheresHector.getRawPosition(hector.resolution, hector.width, hector.height)
+        person_data = get_api_data() # gather newest person detection
 
         # Load the occupancy grid from the data (example using random data here)
-        #updated_grid = plot_people_on_grid(hector, wheresHector, person_data) # plot people on grid   
-        cropped_grid = hector.shrink_grid(hector.grid) # shrink for plotting
+        updated_grid = plot_people_on_grid(hector, wheresHector, person_data) # plot people on grid   
+        cropped_grid = hector.shrink_grid(updated_grid) # shrink for plotting
         # np.savetxt("./Data/temp_grid.txt", cropped_grid) # incase we want more data
 
         if USE_DYNAMIC_POS:
             wheresHector.getRawPosition(hector.resolution, hector.width, hector.height)
+            drone_pos = wheresHector.convertGridSystems(original_pos, hector.shrink_x, hector.shrink_y)
+            is_drone_pos_init = True
+
         if not is_drone_pos_init:
-            drone_pos = wheresHector.convertGridSystems((wheresHector.conv_x, wheresHector.conv_y), hector.shrink_x, hector.shrink_y)
+            drone_pos = wheresHector.convertGridSystems(original_pos, hector.shrink_x, hector.shrink_y)
             is_drone_pos_init = True
 
         # Had to move this down so we can get the size of the grid before error checking
@@ -139,7 +164,7 @@ def main():
 
         # Draw the occupancy grid and drone
         draw_occupancy_grid(cropped_grid)
-        draw_drone(drone_pos)
+        draw_drone(drone_pos, wheresHector.yaw)
 
         # Update the display
         pygame.display.flip()

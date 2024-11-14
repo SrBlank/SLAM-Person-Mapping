@@ -2,6 +2,7 @@ import pygame
 import sys
 import numpy as np
 import requests
+import rospy
 
 from slam_handler import Grid, PoseEstimate
 
@@ -15,7 +16,7 @@ BLUE = (0, 0, 255)      # Person
 
 # Grid Settings
 GRID_SIZE = 10 # Size of each grid cell in pixels, adjust based on display
-
+USE_DYNAMIC_POS = False # False: uses keyboard to move drone around, True: uses true drone position
 # User is able to set or use SLAM position
 # Drone's initial position (grid coordinates)
 # drone_pos = (25, 25)  # Start at the center of the grid
@@ -35,10 +36,10 @@ def get_api_data(api_url="http://localhost:5000/get_people"):
             print("Data retrieved successfully.")
             return data
         else:
-            print(f"Failed to fetch data. Status code: {response.status_code}")
+            print("Failed to fetch data. Status code: ",response.status_code)
             return None
     except requests.RequestException as e:
-        print(f"Error fetching data: {e}")
+        print("Error fetching data: ",e)
         return None
 
 def plot_people_on_grid(hector, wheresHector, people):
@@ -90,7 +91,12 @@ DRIVER
 def main():
     hector = Grid()
     wheresHector = PoseEstimate()
-    get_grid_data(hector, wheresHector) # intial gather data (blocking function) to know we are ready
+
+    # intial gather data (blocking function) to know we are ready
+    hector.getOccupancyGrid()  
+    wheresHector.getRawPosition(hector.resolution, hector.width, hector.height)
+
+    is_drone_pos_init = False # switch because i cant code 
 
     # Main loop
     running = True
@@ -105,28 +111,31 @@ def main():
         window.fill(BLACK)
 
         # Data gathering and processing
-        get_grid_data(hector, wheresHector) # update occupancy grid and position
-        person_data = get_api_data() # gather newest person detection
+        hector.getOccupancyGrid()
+        #person_data = get_api_data() # gather newest person detection
 
         # Load the occupancy grid from the data (example using random data here)
-        updated_grid = plot_people_on_grid(hector, wheresHector, person_data) # plot people on grid   
-        cropped_grid = hector.shrink_grid(updated_grid) # shrink for plotting
+        #updated_grid = plot_people_on_grid(hector, wheresHector, person_data) # plot people on grid   
+        cropped_grid = hector.shrink_grid(hector.grid) # shrink for plotting
         # np.savetxt("./Data/temp_grid.txt", cropped_grid) # incase we want more data
 
-        # optional: set drone pose to true pose
-        drone_pos = wheresHector.convertGridSystems((wheresHector.conv_x, wheresHector.conv_y), hector.width, cropped_grid.shape[0])
+        if USE_DYNAMIC_POS:
+            wheresHector.getRawPosition(hector.resolution, hector.width, hector.height)
+        if not is_drone_pos_init:
+            drone_pos = wheresHector.convertGridSystems((wheresHector.conv_x, wheresHector.conv_y), hector.shrink_x, hector.shrink_y)
+            is_drone_pos_init = True
 
         # Had to move this down so we can get the size of the grid before error checking
         # Move drone based on key presses (for testing movement) 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] and drone_pos[0] > 0:
             drone_pos = (drone_pos[0] - 1, drone_pos[1])
-        if keys[pygame.K_RIGHT] and drone_pos[0] < cropped_grid.shape[0] - 1:
+        if keys[pygame.K_RIGHT] and drone_pos[0] < cropped_grid.shape[1] - 1:
             drone_pos = (drone_pos[0] + 1, drone_pos[1])
         if keys[pygame.K_UP] and drone_pos[1] > 0:
-            drone_pos = (drone_pos[1], drone_pos[0] - 1)
+            drone_pos = (drone_pos[0], drone_pos[1] - 1)
         if keys[pygame.K_DOWN] and drone_pos[1] < cropped_grid.shape[0] - 1:
-            drone_pos = ( drone_pos[1], drone_pos[0] + 1)
+            drone_pos = (drone_pos[0], drone_pos[1] + 1)
 
         # Draw the occupancy grid and drone
         draw_occupancy_grid(cropped_grid)
@@ -139,11 +148,14 @@ def main():
         pygame.time.Clock().tick(10)
 
 if __name__ == "__main__":
+    # Initalize ros
+    rospy.init_node("map_listener", anonymous=True)
+
     # Initialize pygame
     pygame.init()
 
     # Set up display
-    width, height = 600, 600  # Adjust if necessary based on grid size and resolution
+    width, height = 1200, 1200  # Adjust if necessary based on grid size and resolution
     window = pygame.display.set_mode((width, height))
     pygame.display.set_caption("Occupancy Grid with Drone Position")
 

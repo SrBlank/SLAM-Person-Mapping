@@ -17,3 +17,6 @@ This project uses Simultaneous Localization and Mapping (SLAM) to track and map 
 - - `src/ros_ws/src/` - git sub repos for LiDAR and Hector-SLAM and source code for project
 - - `src/ros_ws/person_mapping/src/slam_handler.py` - SLAM and Pose classes (Python 2)
 - - `src/ros_ws/person_mappping/src/main.py` - Driver and GUI code (Python 2)
+- `Test/` - Test directory not dependent on any hardware or Python version
+- - `Test/Data` - Sample data from SLAM and API for testing
+- `ExampleCode/` - Small components or demos of code while testing and development

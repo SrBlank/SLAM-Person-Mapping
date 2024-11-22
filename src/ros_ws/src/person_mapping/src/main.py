@@ -1,3 +1,5 @@
+# NOTE: TYPEHINTING IS NOT SUPPORTED IN PYTHON 2
+
 import pygame
 import sys
 import numpy as np
@@ -17,7 +19,7 @@ BLUE = (0, 0, 255)      # Person
 
 # Grid Settings
 GRID_SIZE = 10 # Size of each grid cell in pixels, adjust based on display
-USE_DYNAMIC_POS = False # False: uses keyboard to move drone around, True: uses true drone position
+USE_DYNAMIC_POS = False # If True, uses SLAM position. Otherwise, uses manual movement.
 # User is able to set or use SLAM position
 # Drone's initial position (grid coordinates)
 # drone_pos = (25, 25)  # Start at the center of the grid
@@ -26,6 +28,15 @@ USE_DYNAMIC_POS = False # False: uses keyboard to move drone around, True: uses 
 GRID 
 """
 def get_api_data(api_url="http://192.168.50.79:5000/get_people"):
+    """
+    Fetches person detection data from the API.
+
+    Args:
+        api_url: The URL of the API endpoint.
+
+    Returns:
+        A JSON object containing detected person data or None if there's an error.
+    """
     try:
         response = requests.get(api_url)
         if response.status_code == 200:
@@ -40,9 +51,20 @@ def get_api_data(api_url="http://192.168.50.79:5000/get_people"):
         return None
 
 def plot_people_on_grid(hector, wheresHector, people, circle_radius=2):
+    """
+    Updates the occupancy grid by plotting detected people.
+
+    Args:
+        hector: Grid object containing the occupancy grid data.
+        wheresHector: PoseEstimate object containing robot position and orientation.
+        people: List of detected people with depth and confidence information.
+        circle_radius: Radius of the area to mark around each detected person.
+
+    Returns:
+        Updated occupancy grid with detected people plotted.
+    """
     occupancy_grid = hector.grid.copy()
 
-    # Plot each detected person in the grid with value 50
     for person in people:
         if person['confidence'] >= 0.5:  # Filter out low-confidence detections
             distance = person['depth']
@@ -62,27 +84,37 @@ def plot_people_on_grid(hector, wheresHector, people, circle_radius=2):
                         circle_x = person_x + dx
                         circle_y = person_y + dy
 
-                        # Ensure coordinates are within grid bounds
                         if 0 <= circle_x < hector.width and 0 <= circle_y < hector.height:
-                            occupancy_grid[circle_y, circle_x] = 50
+                            occupancy_grid[circle_y, circle_x] = 50 # Mark as detected person
     
     return occupancy_grid
 
 """
 GUI
 """
-# Function to draw the occupancy grid
 def draw_occupancy_grid(occupancy_grid):
+    """
+    Draws the occupancy grid on the Pygame window.
+
+    Args:
+        occupancy_grid: 2D NumPy array representing the occupancy grid.
+    """
     for row in range(occupancy_grid.shape[0]):
         for col in range(occupancy_grid.shape[1]):
             cell_value = occupancy_grid[row][col]
             color = GRAY if cell_value == -1 else GREEN if cell_value == 0 else RED if cell_value == 100 else BLUE
             pygame.draw.rect(window, color, (col * GRID_SIZE, row * GRID_SIZE, GRID_SIZE, GRID_SIZE))
 
-# Function to draw the drone with its direction (yaw)
 def draw_drone(pos, yaw):
-    # Fixed size for the drone's circle (independent of GRID_SIZE)
-    drone_radius = 20  # Adjust size as needed
+    """
+    Draws the drone on the grid, including its directional yaw arrow.
+
+    Args:
+        pos: Tuple containing the drone's (x, y) position in grid coordinates.
+        yaw: Yaw angle (in degrees) indicating the drone's direction.
+    """
+    
+    drone_radius = 20  # Fixed size for the drone's circle 
 
     # Drone position in pixels
     x = pos[0] * GRID_SIZE + GRID_SIZE // 2
@@ -96,7 +128,7 @@ def draw_drone(pos, yaw):
     yaw_rad = math.radians(yaw)
 
     # Define the length of the direction arrow
-    arrow_length = 30  # You can adjust this value based on the size of the drone
+    arrow_length = 30  
 
     # Calculate the arrow endpoint (direction the drone is facing)
     end_x = x + int(arrow_length * math.cos(yaw_rad))
@@ -117,7 +149,7 @@ def main():
     wheresHector.getRawPosition(hector.resolution, hector.width, hector.height)
     original_pos = (wheresHector.conv_x, wheresHector.conv_y)
 
-    is_drone_pos_init = False # switch because i cant code 
+    is_drone_pos_init = False #
 
     # Main loop
     running = True
@@ -150,7 +182,6 @@ def main():
             drone_pos = wheresHector.convertGridSystems(original_pos, hector.shrink_x, hector.shrink_y)
             is_drone_pos_init = True
 
-        # Had to move this down so we can get the size of the grid before error checking
         # Move drone based on key presses (for testing movement) 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] and drone_pos[0] > 0:
